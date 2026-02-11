@@ -113,8 +113,7 @@ client-payload: |
   ![Pipeline Output](images/img2.png)
   
 - Repo B runs orchestrator pipeline -> identifies and runs reusable_code.yml ONLY:
-  
-!![Pipeline Output](images/img1.png)
+  ![Pipeline Output](images/img1.png)
 
 
 
