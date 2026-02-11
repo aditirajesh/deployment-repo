@@ -1,4 +1,4 @@
-name: Orchestrate from Repo A (diff-based)
+name: Orchestrate from Repo A (diff-based + router approach)
 
 on:
   repository_dispatch:

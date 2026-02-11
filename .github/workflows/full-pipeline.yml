@@ -1,4 +1,4 @@
-name: Orchestrate from Repo A
+name: Orchestration from A and full execution
 
 on:
   repository_dispatch:
