@@ -1,0 +1,19 @@
+name: Reusable - Code
+on:
+  workflow_call:
+    inputs:
+      source_repo: { required: true, type: string }
+      sha: { required: true, type: string }
+
+jobs:
+  code:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          repository: ${{ inputs.source_repo }}
+          ref: ${{ inputs.sha }}
+      - run: bash dev/backend/run_backend.sh
+      - run: bash dev/frontend/run_frontend.sh
+      - run: bash dev/database/run_database.sh
+      - run: cat dev/parameters/params.json

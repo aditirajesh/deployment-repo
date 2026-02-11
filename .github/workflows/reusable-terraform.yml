@@ -1,0 +1,29 @@
+name: Reusable - Terraform
+on:
+  workflow_call:
+    inputs:
+      source_repo: { required: true, type: string }
+      sha: { required: true, type: string }
+      ref: { required: true, type: string }
+
+jobs:
+  terraform:
+    runs-on: ubuntu-latest
+    concurrency:
+      group: terraform-prod
+      cancel-in-progress: false
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          repository: ${{ inputs.source_repo }}
+          ref: ${{ inputs.sha }}
+
+      - uses: hashicorp/setup-terraform@v3
+      - run: terraform init
+        working-directory: dev/terraform
+      - run: terraform plan
+        working-directory: dev/terraform
+      - name: Apply (main only)
+        if: ${{ inputs.ref == 'refs/heads/main' }}
+        run: terraform apply -auto-approve
+        working-directory: dev/terraform

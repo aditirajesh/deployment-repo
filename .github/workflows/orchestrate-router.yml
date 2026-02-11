@@ -1,0 +1,75 @@
+name: Orchestrate from Repo A (diff-based)
+
+on:
+  repository_dispatch:
+    types: [repo-a-change]
+
+jobs:
+  detect_changes:
+    runs-on: ubuntu-latest
+    outputs:
+      run_code: ${{ steps.route.outputs.run_code }}
+      run_terraform: ${{ steps.route.outputs.run_terraform }}
+    steps:
+      - name: Print payload
+        run: |
+          echo "Source repo: ${{ github.event.client_payload.source_repo }}"
+          echo "Ref:        ${{ github.event.client_payload.ref }}"
+          echo "SHA:        ${{ github.event.client_payload.sha }}"
+          echo "Before:     ${{ github.event.client_payload.before }}"
+
+      - name: Checkout Repo A at SHA (full history for diff)
+        uses: actions/checkout@v4
+        with:
+          repository: ${{ github.event.client_payload.source_repo }}
+          ref: ${{ github.event.client_payload.sha }}
+          fetch-depth: 0
+
+      - name: Decide what to run (git diff)
+        id: route
+        shell: bash
+        run: |
+          BEFORE="${{ github.event.client_payload.before }}"
+          SHA="${{ github.event.client_payload.sha }}"
+
+          # First commit / branch creation case (before is all zeros)
+          if [[ "$BEFORE" == "0000000000000000000000000000000000000000" || -z "$BEFORE" ]]; then
+            CHANGED="$(git show --name-only --pretty='' "$SHA" | sed '/^$/d')"
+          else
+            CHANGED="$(git diff --name-only "$BEFORE" "$SHA")"
+          fi
+
+          echo "Changed files:"
+          echo "$CHANGED"
+
+          # Compute routing decisions (internal only; Repo A never sends these)
+          run_terraform=false
+          run_code=false
+
+          if echo "$CHANGED" | grep -qE '^dev/terraform/'; then
+            run_terraform=true
+          fi
+
+          if echo "$CHANGED" | grep -qE '^dev/(backend|frontend|database|parameters)/'; then
+            run_code=true
+          fi
+
+          echo "run_code=$run_code" >> "$GITHUB_OUTPUT"
+          echo "run_terraform=$run_terraform" >> "$GITHUB_OUTPUT"
+
+  run_code:
+    needs: detect_changes
+    if: ${{ needs.detect_changes.outputs.run_code == 'true' }}
+    uses: ./.github/workflows/reusable-code.yml
+    with:
+      source_repo: ${{ github.event.client_payload.source_repo }}
+      sha: ${{ github.event.client_payload.sha }}
+
+  run_terraform:
+    needs: detect_changes
+    if: ${{ needs.detect_changes.outputs.run_terraform == 'true' }}
+    uses: ./.github/workflows/reusable-terraform.yml
+    with:
+      source_repo: ${{ github.event.client_payload.source_repo }}
+      sha: ${{ github.event.client_payload.sha }}
+      ref: ${{ github.event.client_payload.ref }}

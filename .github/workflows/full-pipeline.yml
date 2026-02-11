@@ -1,0 +1,64 @@
+name: Orchestrate from Repo A
+
+on:
+  repository_dispatch:
+    types: [repo-a-change]
+
+jobs:
+  show_payload:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Print payload
+        run: |
+          echo "Source repo: ${{ github.event.client_payload.source_repo }}"
+          echo "Ref:        ${{ github.event.client_payload.ref }}"
+          echo "SHA:        ${{ github.event.client_payload.sha }}"
+          echo "TF changed: ${{ github.event.client_payload.terraform_changed }}"
+          echo "Code chg:   ${{ github.event.client_payload.code_changed }}"
+
+  run_code:
+    runs-on: ubuntu-latest
+    needs: show_payload
+    if: ${{ github.event.client_payload.code_changed == 'true' }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          repository: ${{ github.event.client_payload.source_repo }}
+          ref: ${{ github.event.client_payload.sha }}
+
+      - name: Run backend script
+        run: bash dev/backend/run_backend.sh
+      - name: Run frontend script
+        run: bash dev/frontend/run_frontend.sh
+      - name: Run database script
+        run: bash dev/database/run_database.sh
+      - name: Read parameters
+        run: cat dev/parameters/params.json
+
+  run_terraform:
+    runs-on: ubuntu-latest
+    needs: show_payload
+    if: ${{ github.event.client_payload.terraform_changed == 'true' }}
+    concurrency:
+      group: terraform-prod
+      cancel-in-progress: false
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          repository: ${{ github.event.client_payload.source_repo }}
+          ref: ${{ github.event.client_payload.sha }}
+
+      - uses: hashicorp/setup-terraform@v3
+
+      - name: Terraform init
+        working-directory: dev/terraform
+        run: terraform init
+
+      - name: Terraform plan
+        working-directory: dev/terraform
+        run: terraform plan
+
+      - name: Terraform apply (main only)
+        if: ${{ github.event.client_payload.ref == 'refs/heads/main' }}
+        working-directory: dev/terraform
+        run: terraform apply -auto-approve
